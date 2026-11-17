@@ -52,3 +52,39 @@ The existing `GET itinerary/api.php` and `?id=123` endpoints continue to
 serve previously published unowned suggested itineraries. Private visitor
 trips are excluded. The new panel manages businesses and provides a link to
 the public planner. It does not edit visitors' private trips.
+
+## Website API integration
+
+The website's own frontend consumes these endpoints. The bundled
+`itinerary/index.php` is a reference consumer that loads its listing data,
+event data, account state and saved trips through API requests. It embeds
+no database records in its HTML. The panel remains the staff editing interface.
+Use the actual installation prefix before the paths below.
+
+| Request | Purpose |
+| --- | --- |
+| `GET business/api.php` | Published businesses and media URLs |
+| `GET business/api.php?id=123` | One published business |
+| `GET api.php?display=calendar&keep_current_month=0` | Current/upcoming Event Forge events |
+| `GET itinerary/account-api.php` | Visitor ID, or zero for guests, and CSRF token |
+| `POST itinerary/account-api.php` | JSON registration, sign-in or sign-out |
+| `GET itinerary/saved-api.php` | Signed-in visitor's saved trips |
+| `GET itinerary/saved-api.php?id=123` | One privately owned trip and its stops |
+| `POST itinerary/saved-api.php` | JSON save or delete |
+| `GET itinerary/api.php` | Previously published suggested trips |
+
+The account API accepts `action` as `register`, `login`, or `logout`, plus
+`csrf_token`. Registration and login also require `email` and `password`.
+Its response contains `user_id` and a new `csrf_token`. Update the site's
+stored token after authentication and use it for save/delete calls. Send
+requests with same-origin credentials so the visitor session cookie follows.
+Keep the draft in the website frontend during account registration or login.
+
+The Event Forge calendar feed may expand one multi-day event into multiple
+rows with the same source ID. The reference planner deduplicates the picker
+by ID and excludes events whose `extendedProps.isCanceled` is true.
+
+These are the website's native APIs. Kiosk and mobile compatibility adapters
+remain separate and need their existing response contracts. For a website
+on another origin, use a same-origin backend proxy that maintains the visitor
+session. Cross-origin cookies and CORS are not configured by these modules.

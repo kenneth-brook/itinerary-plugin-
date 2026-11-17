@@ -5,6 +5,7 @@ require_once __DIR__ . '/store.php';
 require_once __DIR__ . '/visitor.php';
 trip_visitor_start();
 $error = '';
+$returnId = filter_var($_GET['saved'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]) ?: 0;
 $mode = ($_GET['mode'] ?? '') === 'register' ? 'register' : 'login';
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     try {
@@ -25,7 +26,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             }
             trip_authenticate($db, $mode, $_POST['email'], $_POST['password']);
         }
-        header('Location: index.php?resume=1', true, 303);
+        header('Location: index.php' . ($returnId && trip_visitor_id() ? '?saved=' . $returnId : '?resume=1'), true, 303);
         exit;
     } catch (InvalidArgumentException $e) {
         $error = $e->getMessage();
@@ -51,6 +52,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 <?php if ($mode === 'register'): ?><p>Use at least 12 characters. The password may contain up to 72 bytes.</p><?php endif; ?>
 <button><?= $mode === 'register' ? 'Create account' : 'Sign in' ?></button>
 </form>
-<p><a href="account.php?mode=<?= $mode === 'register' ? 'login' : 'register' ?>"><?= $mode === 'register' ? 'Sign in to an existing account' : 'Create an account' ?></a></p>
+<p><a href="account.php?mode=<?= $mode === 'register' ? 'login' : 'register' ?><?= $returnId ? '&amp;saved=' . $returnId : '' ?>"><?= $mode === 'register' ? 'Sign in to an existing account' : 'Create an account' ?></a></p>
 <a href="index.php?resume=1">Return to your trip</a>
 </body></html>
