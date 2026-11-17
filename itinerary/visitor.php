@@ -4,10 +4,11 @@ declare(strict_types=1);
 function trip_visitor_start(): void
 {
     session_name('trip_forge_visitor');
+    $secure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
     session_set_cookie_params([
         'lifetime' => 0, 'path' => rtrim(eventforge_public_path('itinerary'), '/') . '/',
-        'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
-        'httponly' => true, 'samesite' => 'Lax',
+        'secure' => $secure,
+        'httponly' => true, 'samesite' => $secure ? 'None' : 'Lax',
     ]);
     ini_set('session.use_strict_mode', '1');
     session_start();
