@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/store.php';
+require_once __DIR__ . '/visitor.php';
+trip_visitor_start();
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 $id = filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
@@ -15,19 +18,37 @@ try {
     if (!$db) {
         throw new RuntimeException('Event Forge database is unavailable.');
     }
+    $userId = trip_visitor_id();
+    $savedId = filter_var($_GET['saved'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+    if ($savedId === false) {
+        http_response_code(400);
+        exit('Invalid itinerary ID.');
+    }
+    if ($savedId > 0 && !$userId) {
+        header('Location: account.php');
+        exit;
+    }
+    $myPlans = $userId ? itinerary_list($db, false, 0, $userId) : [];
     $plans = itinerary_list($db, true);
     $plan = array_column($plans, null, 'id')[$id] ?? null;
     if ($id > 0 && $plan === null) {
         http_response_code(404);
         exit('Itinerary not found.');
     }
+    if ($savedId > 0) {
+        $plan = itinerary_list($db, false, $savedId, $userId)[0] ?? null;
+        if ($plan === null) {
+            http_response_code(404);
+            exit('Itinerary not found.');
+        }
+    }
     $choices = itinerary_choices($db);
     $initial = [];
     if ($plan !== null) {
-        foreach (itinerary_items($db, $id, true) as $stop) {
+        foreach (itinerary_items($db, (int) $plan['id'], false) as $stop) {
             $initial[] = $stop['type'] . ':' . $stop['id'];
             $choices[$stop['type']][$stop['id']] = $choices[$stop['type']][$stop['id']]
-                ?? $stop['business']['name'] ?? ($stop['event']['title'] . ' · ' . $stop['event']['start']);
+                ?? $stop['business']['name'] ?? $stop['event']['title'] ?? 'Unavailable stop';
         }
     }
 } catch (Throwable $e) {
@@ -62,6 +83,22 @@ function trip_page_escape(string $value): string
 <body>
 <main>
   <h1>Trip Planner</h1>
+  <p>Build your trip below. Sign in when you want to save it.</p>
+  <?php if ($userId): ?>
+    <form action="account.php" method="post">
+      <input type="hidden" name="csrf_token" value="<?= trip_escape($_SESSION['trip_csrf']) ?>">
+      <button name="action" value="logout">Sign out</button>
+    </form>
+    <?php if ($myPlans): ?>
+      <section><h2>My saved trips</h2><ul>
+      <?php foreach ($myPlans as $entry): ?>
+        <li><a href="?saved=<?= $entry['id'] ?>"><?= trip_page_escape($entry['title']) ?></a>
+          <button type="button" data-delete="<?= $entry['id'] ?>">Delete <?= trip_page_escape($entry['title']) ?></button></li>
+      <?php endforeach; ?>
+      </ul><p data-delete-status role="status"></p></section>
+    <?php endif; ?>
+  <?php endif; ?>
+  <p><a href="?new=1">Start a new trip</a></p>
   <?php if ($plans): ?>
     <section>
       <h2>Suggested itineraries</h2>
@@ -73,7 +110,8 @@ function trip_page_escape(string $value): string
       <?php if ($plan !== null): ?><a href="index.php">Start a blank trip</a><?php endif; ?>
     </section>
   <?php endif; ?>
-  <section data-planner data-initial="<?= trip_page_escape(json_encode($initial, JSON_THROW_ON_ERROR)) ?>">
+  <section data-planner data-user="<?= $userId ?>" data-saved="<?= $savedId ?>"
+    data-token="<?= trip_escape($_SESSION['trip_csrf']) ?>" data-initial="<?= trip_page_escape(json_encode($initial, JSON_THROW_ON_ERROR)) ?>">
     <h2><?= trip_page_escape($plan['title'] ?? 'Build your trip') ?></h2>
     <?php if (!empty($plan['description'])): ?><p><?= trip_page_escape($plan['description']) ?></p><?php endif; ?>
     <ol data-plan>
@@ -83,6 +121,10 @@ function trip_page_escape(string $value): string
       <?php endforeach; ?>
     </ol>
     <div data-controls hidden>
+      <label for="trip-title">Trip name</label>
+      <input id="trip-title" maxlength="160" value="<?= trip_page_escape($plan['title'] ?? 'My trip') ?>">
+      <label for="trip-description">Trip notes</label>
+      <textarea id="trip-description" maxlength="10000" rows="3"><?= trip_page_escape($plan['description'] ?? '') ?></textarea>
       <label for="source">Add a business or event</label>
       <select id="source">
         <option value="">Choose a stop</option>
@@ -96,7 +138,14 @@ function trip_page_escape(string $value): string
       </select>
       <button type="button" data-add>Add</button>
       <p data-status role="status"></p>
-      <label for="share">Share or bookmark your trip</label>
+      <?php if ($userId): ?>
+        <button type="button" data-save>Save trip</button>
+        <button type="button" data-save-copy>Save as a new trip</button>
+      <?php else: ?>
+        <p><a data-account href="account.php">Sign in to save</a> or
+          <a data-account href="account.php?mode=register">create an account</a>.</p>
+      <?php endif; ?>
+      <label for="share">Share your trip</label>
       <input id="share" readonly>
     </div>
     <noscript><p>Enable JavaScript to build and share your own itinerary.</p></noscript>
