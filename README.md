@@ -85,6 +85,35 @@ rows with the same source ID. The reference planner deduplicates the picker
 by ID and excludes events whose `extendedProps.isCanceled` is true.
 
 These are the website's native APIs. Kiosk and mobile compatibility adapters
-remain separate and need their existing response contracts. For a website
-on another origin, use a same-origin backend proxy that maintains the visitor
-session. Cross-origin cookies and CORS are not configured by these modules.
+remain separate and need their existing response contracts. For additional website origins, configure the shared CORS allowlist.
+The review-site instructions below cover credentialed browser requests and
+the backend proxy option when a browser blocks third-party cookies.
+
+## Cross-origin review site
+
+Upload the companion Business Directory CORS helper and Event Forge API
+update with this module to allow the frontend at `https://review.365dtm.com`.
+The itinerary read, account and saved-trip endpoints use the shared origin
+allowlist. Account and saved-trip APIs allow credentials and handle OPTIONS
+preflight before starting a visitor session.
+
+For direct browser calls from the review site, use absolute URLs and set
+`credentials: 'include'` on account and saved-trip requests. Continue using
+the CSRF token returned by the account API for every mutation.
+
+```javascript
+const api = 'https://www.franklin-county.com/event-forge/events/';
+const response = await fetch(api + 'itinerary/account-api.php', {
+  credentials: 'include'
+});
+if (!response.ok) throw new Error('Unable to initialize your account session.');
+const { user_id, csrf_token } = await response.json();
+```
+
+HTTPS visitor cookies use Secure, HttpOnly and SameSite=None. Local HTTP
+uses SameSite=Lax. Browser policies may still block third-party cookies.
+If the browser blocks these sessions, route account and saved-trip calls
+through a backend proxy on the review site's own origin that maintains the
+upstream visitor session. Public business and event reads do not need a
+visitor session. References are available in
+https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS.

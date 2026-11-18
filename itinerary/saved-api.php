@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../business/cors.php';
+forge_api_cors(['GET', 'POST'], true);
+
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/store.php';
 require_once __DIR__ . '/visitor.php';
